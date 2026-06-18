@@ -8,6 +8,7 @@ from app.schemas.analysis_schema import AnalysisRequest, AnalysisResponse
 from app.services.analysis_service import AnalysisService
 
 router = APIRouter(
+    prefix="/analysis",
     tags=["Analysis"]
 )
 

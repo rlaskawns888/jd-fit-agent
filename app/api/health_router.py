@@ -6,11 +6,12 @@ from app.schemas.common_schema import ApiResponse, success_response
 
 
 router = APIRouter(
+    prefix="/health",
     tags=["Health"]
 )
 
 
-@router.get("/health", response_model=ApiResponse)
+@router.get("", response_model=ApiResponse)
 async def health_check() -> ApiResponse:
     return success_response(
         data={
