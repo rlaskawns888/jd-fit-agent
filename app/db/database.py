@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.core.config import settings
@@ -29,3 +29,11 @@ def get_db():
         yield db
     finally:
         db.close()
+
+def init_db() -> None:
+    with engine.begin() as connection:
+        connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector")) 
+        #벡터 검색을 위한 PostgreSQL pgvector 확장 설치
+    
+    Base.metadata.create_all(bind=engine)
+    #모델에 정의된 모든 테이블 생성

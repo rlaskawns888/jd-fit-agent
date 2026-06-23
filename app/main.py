@@ -6,11 +6,10 @@ from app.api.resume_router import router as reasume_router
 
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
-from app.db.database import Base, engine
+from app.db.database import Base, engine, init_db
 
-
-Base.metadata.create_all(bind=engine)
-# [TEST] SQLAlchemy 모델 기준으로 테이블을 자동 생성
+# DB초기화
+init_db()
 
 def create_app() -> FastAPI:
     app = FastAPI(
