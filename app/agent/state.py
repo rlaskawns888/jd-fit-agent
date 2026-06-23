@@ -1,6 +1,6 @@
 # 그래프가 들고 다니는 "상태" 정의
 
-from typing import Optional, TypedDict
+from typing import Any, Optional, TypedDict
 
 class AgentState(TypedDict):
     """
@@ -20,7 +20,7 @@ class AgentState(TypedDict):
     quality_reason: Optional[str]  # 왜 그렇게 판단했는지 (디버깅/설명용)
 
     #analyze_jd_node가 채우는 값 (지금 단계는 mock)
-    jd_summary: Optional[str]
+    jd_summary: Optional[dict[str, Any]]
 
     #request_clarification_node가 채우는 값
     clarification_message: Optional[str] #설명 요청 메시지

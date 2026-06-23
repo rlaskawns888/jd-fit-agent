@@ -2,6 +2,8 @@
 
 from app.agent.state import AgentState
 
+from app.services.llm_service import LLMService
+
 # JD가 분석 가능한 수준인지 판단하는 임시 기준
 # 다음 단계(LLM 연결)에서 이 숫자 기준은 LLM 판단으로 교체된다.
 MIN_JD_LENGTH_FRO_ANALYSIS = 80
@@ -31,12 +33,28 @@ def assess_jd_quality_node(state: AgentState) -> dict:
     """
     jd_text = state["jd_text"]
 
-    if len(jd_text) < MIN_JD_LENGTH_FRO_ANALYSIS:
-        quality = "insufficient"
-        reason = f"JD 텍스트가 {len(jd_text)}자로 너무 짧아 분석에 필요한 정보가 부족합니다"
-    else:
-        quality = "sufficient"
-        reason = f"JD 텍스트가 {len(jd_text)}자로 분석 가능한 분량입니다."
+    # OpenAI
+    system_prompt = (
+        "너는 채용공고(JD) 품질을 평가하는 전문가다. "
+        "주어진 JD 텍스트가 회사명/역할/필수기술 등 분석에 필요한 "
+        "최소한의 정보를 담고 있는지 판단하라. "
+        "반드시 JSON 형식으로만 답하라. "
+        '형식: {"quality": "sufficient" 또는 "insufficient", "reason": "판단 이유 한 문장"}'
+    )
+    user_prompt = f"다음 JD 텍스트를 평가해줘:\n\n{jd_text}"
+
+    llm = LLMService()
+    result = llm.ask_json(system_prompt, user_prompt)
+
+    quality = result.get("quality", "insufficient")
+    reason = result.get("reason", "")
+
+    # if len(jd_text) < MIN_JD_LENGTH_FRO_ANALYSIS:
+    #     quality = "insufficient"
+    #     reason = f"JD 텍스트가 {len(jd_text)}자로 너무 짧아 분석에 필요한 정보가 부족합니다"
+    # else:
+    #     quality = "sufficient"
+    #     reason = f"JD 텍스트가 {len(jd_text)}자로 분석 가능한 분량입니다."
 
     return {
         "jd_quality": quality,
@@ -50,10 +68,25 @@ def analyze_jd_node(state: AgentState) -> dict:
     다음 단계에서 OpenAI 호출로 교체되어 실제 필수기술/우대사항/도메인을 추출한다.
     """
     jd_text = state["jd_text"]
-    mock_summary = f"[MOCK] 길이 {len(jd_text)}자 JD 분석 완료"
+    # mock_summary = f"[MOCK] 길이 {len(jd_text)}자 JD 분석 완료"
+
+    system_prompt = (
+        "너는 채용공고(JD) 분석 전문가다. 주어진 JD에서 핵심 정보를 추출하라. "
+        "반드시 JSON 형식으로만 답하라. "
+        '형식: {"company_name": "회사명 또는 Unknown", '
+        '"job_title": "직무명 또는 Unknown", '
+        '"required_skills": ["필수기술1", "필수기술2"], '
+        '"preferred_skills": ["우대기술1", "우대기술2"], '
+        '"domain": "도메인 설명 한 문장"}'
+    )
+    user_prompt = f"다음 JD를 분석해줘:\n\n{jd_text}"
+
+    llm = LLMService()
+    result = llm.ask_json(system_prompt, user_prompt)
 
     return {
-        "jd_summary": mock_summary,
+        # "jd_summary": mock_summary,
+        "jd_summary": result,
         "visited_nodes": state.get("visited_nodes", []) + ["analyze_jd"],
     }
 
