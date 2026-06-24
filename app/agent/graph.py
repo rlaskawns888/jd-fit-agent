@@ -1,5 +1,7 @@
 #노드들을 어떤 순서/조건으로 연결할지
 
+from sqlalchemy.orm import Session
+
 from langgraph.graph import StateGraph, START, END
 
 from app.agent.state import AgentState
@@ -7,12 +9,13 @@ from app.agent.nodes import (
     collect_jd_node,
     assess_jd_quality_node,
     analyze_jd_node,
+    make_search_resume_node,
     request_clarification_node,
 )
 from app.agent.router import route_by_jd_quality
 
 
-def build_jd_fit_graph():
+def build_jd_fit_graph(db : Session):
     """
     JD Fit Agent의 LangGraph 그래프를 만들고 컴파일해서 반환한다.
 
@@ -28,6 +31,7 @@ def build_jd_fit_graph():
     builder.add_node("collect_jd", collect_jd_node)
     builder.add_node("assess_jd_quality", assess_jd_quality_node)
     builder.add_node("analyze_jd", analyze_jd_node)
+    builder.add_node("search_resume", make_search_resume_node(db))
     builder.add_node("request_clarification", request_clarification_node)
 
     builder.add_edge(START, "collect_jd")
@@ -44,10 +48,11 @@ def build_jd_fit_graph():
         }
     )
 
-    builder.add_edge("analyze_jd", END)
+    builder.add_edge("analyze_jd", "search_resume")
+    builder.add_edge("search_resume", END)
     builder.add_edge("request_clarification", END)
 
     return builder.compile()
 
-# 그래프는 한 번만 컴파일해서 재사용한다 (요청마다 새로 빌드할 필요 없음)
-jd_fit_graph = build_jd_fit_graph()
+# 그래프는 한 번만 컴파일해서 재사용한다 (요청마다 새로 빌드할 필요 없음) > 매요청 마다 그때의 DB 세션으로 새로 빌드
+# jd_fit_graph = build_jd_fit_graph()

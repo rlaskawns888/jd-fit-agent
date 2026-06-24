@@ -22,3 +22,25 @@ class ResumeChunkRepository:
              .filter(ResumeChunk.resume_id == resume_id)
              .delete(synchronize_session=False)
         )
+
+    def find_similar(
+            self, 
+            db:Session, 
+            query_embedding: list[float], 
+            resume_id: Optional[UUID] = None,
+            limit: int = 5,
+    ) -> list[ResumeChunk]:
+        """
+        query_embedding과 코사인 거리가 가까운 순으로 chunk를 limit개 반환한다.
+        resume_id를 주면 특정 이력서 안에서만 검색한다.
+        """
+        query = db.query(ResumeChunk)
+
+        if resume_id is not None:
+            query = query.filter(ResumeChunk.resume_id == resume_id)
+
+        return (
+            query.order_by(ResumeChunk.embedding.cosine_distance(query_embedding))
+             .limit(limit)
+             .all()
+        )

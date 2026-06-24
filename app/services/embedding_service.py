@@ -11,10 +11,10 @@ class EmbeddingService:
         self.client = OpenAI(api_key=settings.openai_api_key)
         self.model = settings.embedding_modeL
         self.dimensions = settings.embedding_dimensions
-    
-    def embed_text(self, text: str) -> list[float]:
-        return self.embed_texts([text][0])
 
+    def embed_text(self, text: str) -> list[float]:
+        return self.embed_texts([text])[0]
+    
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []

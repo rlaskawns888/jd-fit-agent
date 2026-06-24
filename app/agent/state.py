@@ -22,6 +22,9 @@ class AgentState(TypedDict):
     #analyze_jd_node가 채우는 값 (지금 단계는 mock)
     jd_summary: Optional[dict[str, Any]]
 
+    # search_resume_node가 채우는 값 - pgvector로 찾은 관련 이력서 조각들
+    matched_chunks: Optional[list[dict]]
+
     #request_clarification_node가 채우는 값
     clarification_message: Optional[str] #설명 요청 메시지
 
