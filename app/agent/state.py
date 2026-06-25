@@ -25,6 +25,14 @@ class AgentState(TypedDict):
     # search_resume_node가 채우는 값 - pgvector로 찾은 관련 이력서 조각들
     matched_chunks: Optional[list[dict]]
 
+    #gap_analyze_node
+    fit_score: Optional[int]
+    strengths: Optional[list[str]] #"이 경험이 JD와 왜 맞는지" 이미 설명된 연결 논리
+    gaps: Optional[list[str]]
+
+    #검색 재시도 횟수 - 무한 루프 방지
+    retry_count: int
+
     #request_clarification_node가 채우는 값
     clarification_message: Optional[str] #설명 요청 메시지
 

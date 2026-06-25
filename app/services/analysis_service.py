@@ -14,6 +14,7 @@ class AnalysisService:
             "jd_text": jd_text,
             "resume_id": str(payload.resume_id) if payload.resume_id else None,
             "visited_nodes": [],
+            "retry_count": 0,
         })
 
         # 그래프가 어느 경로로 갔는지(visited_nodes)를 used_tools로 그대로 노출.
@@ -44,15 +45,16 @@ class AnalysisService:
             report_id=str(uuid4()),
             job_title=job_title,
             company_name=company_name,
-            fit_score=0,  # 갭 분석은 다음 단계
-            strengths=jd_summary.get("preferred_skills", []) if jd_summary else [],
-            gaps=[],
+            fit_score=result.get("fit_score", 0),
+            strengths=result.get("strengths", []),
+            gaps=result.get("gaps", []),
             matched_experiences=matched_experiences,
             recommended_strategy=recommended_strategy,
             cover_letter_draft="",
             interview_questions=[],
             used_tools=used_tools,
             sources=sources,
+            retry_count=result.get("retry_count", 0),  # 추가
         )
 
 

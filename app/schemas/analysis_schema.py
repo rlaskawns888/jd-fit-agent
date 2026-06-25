@@ -20,7 +20,6 @@ class AnalysisRequest(BaseModel):
         return self
 
 
-
 class AnalysisResponse(BaseModel):
     analysis_id: str
     report_id: str
@@ -35,4 +34,4 @@ class AnalysisResponse(BaseModel):
     interview_questions: List[str]
     used_tools: List[str]
     sources: List[str]
-
+    retry_count: int = 0  # 추가

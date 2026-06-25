@@ -10,20 +10,22 @@ from app.agent.nodes import (
     assess_jd_quality_node,
     analyze_jd_node,
     make_search_resume_node,
+    gap_analyze_node,
+    increment_retry_node,
     request_clarification_node,
 )
-from app.agent.router import route_by_jd_quality
+from app.agent.router import route_by_jd_quality, route_by_fit_score
 
 
 def build_jd_fit_graph(db : Session):
     """
-    JD Fit Agent의 LangGraph 그래프를 만들고 컴파일해서 반환한다.
-
     그래프 모양:
         START
           -> collect_jd
           -> assess_jd_quality
-               -[sufficient]-> analyze_jd -> END
+               -[sufficient]-> analyze_jd -> search_resume -> gap_analyze
+                    -[점수 낮음, 재시도 안 함]-> increment_retry -> search_resume_retry -> gap_analyze (재귀)
+                    -[점수 충분함 또는 재시도 완료]-> END
                -[insufficient]-> request_clarification -> END
     """
     builder = StateGraph(AgentState)
@@ -31,7 +33,10 @@ def build_jd_fit_graph(db : Session):
     builder.add_node("collect_jd", collect_jd_node)
     builder.add_node("assess_jd_quality", assess_jd_quality_node)
     builder.add_node("analyze_jd", analyze_jd_node)
-    builder.add_node("search_resume", make_search_resume_node(db))
+    builder.add_node("search_resume", make_search_resume_node(db, use_broader_query=False))
+    builder.add_node("search_resume_retry", make_search_resume_node(db, use_broader_query=True))
+    builder.add_node("gap_analyze", gap_analyze_node)
+    builder.add_node("increment_retry", increment_retry_node)
     builder.add_node("request_clarification", request_clarification_node)
 
     builder.add_edge(START, "collect_jd")
@@ -49,7 +54,20 @@ def build_jd_fit_graph(db : Session):
     )
 
     builder.add_edge("analyze_jd", "search_resume")
-    builder.add_edge("search_resume", END)
+    builder.add_edge("search_resume", "gap_analyze")
+
+    #gap_analyze 이후 점수가 낮으면 재시도 
+    builder.add_conditional_edges(
+        "gap_analyze",
+        route_by_fit_score,
+        {
+            "retry_search": "increment_retry",
+            "finish": END,
+        }
+    )
+
+    builder.add_edge("increment_retry", "search_resume_retry")
+    builder.add_edge("search_resume_retry", "gap_analyze")
     builder.add_edge("request_clarification", END)
 
     return builder.compile()

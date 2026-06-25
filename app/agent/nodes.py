@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.agent.state import AgentState
 from app.services.llm_service import LLMService
-from app.tools.resume_search_tool import search_resume_chunks, build_search_query_from_jd
+from app.tools.resume_search_tool import search_resume_chunks, build_search_query_from_jd, build_broader_search_query_from_jd
 
 # JD가 분석 가능한 수준인지 판단하는 임시 기준
 # 다음 단계(LLM 연결)에서 이 숫자 기준은 LLM 판단으로 교체된다.
@@ -20,6 +20,7 @@ def collect_jd_node(state: AgentState) -> dict:
         "jd_text": jd_text,
         "visited_nodes": state.get("visited_nodes", []) + ["collect_jd"]
     }
+
 
 def assess_jd_quality_node(state: AgentState) -> dict:
     """
@@ -43,25 +44,18 @@ def assess_jd_quality_node(state: AgentState) -> dict:
     quality = result.get("quality", "insufficient")
     reason = result.get("reason", "")
 
-    # if len(jd_text) < MIN_JD_LENGTH_FRO_ANALYSIS:
-    #     quality = "insufficient"
-    #     reason = f"JD 텍스트가 {len(jd_text)}자로 너무 짧아 분석에 필요한 정보가 부족합니다"
-    # else:
-    #     quality = "sufficient"
-    #     reason = f"JD 텍스트가 {len(jd_text)}자로 분석 가능한 분량입니다."
-
     return {
         "jd_quality": quality,
         "quality_reason": reason,
         "visited_nodes": state.get("visited_nodes", []) + ["assess_jd_quality"]
     }
 
+
 def analyze_jd_node(state: AgentState) -> dict:
     """
     JD를 구조화 분석하는 노드. 필수기술/우대사항/도메인을 LLM으로 추출한다.
     """
     jd_text = state["jd_text"]
-    # mock_summary = f"[MOCK] 길이 {len(jd_text)}자 JD 분석 완료"
 
     system_prompt = (
         "너는 채용공고(JD) 분석 전문가다. 주어진 JD에서 핵심 정보를 추출하라. "
@@ -78,12 +72,12 @@ def analyze_jd_node(state: AgentState) -> dict:
     result = llm.ask_json(system_prompt, user_prompt)
 
     return {
-        # "jd_summary": mock_summary,
         "jd_summary": result,
         "visited_nodes": state.get("visited_nodes", []) + ["analyze_jd"],
     }
 
-def make_search_resume_node(db: Session):
+
+def make_search_resume_node(db: Session, use_broader_query: bool = False):
     """
     search_resume_node는 db: Session이 필요한데, LangGraph 노드 함수는
     (state) 또는 (state, config) 형태만 받을 수 있다.
@@ -97,10 +91,12 @@ def make_search_resume_node(db: Session):
         이력서 chunk 중 의미적으로 가장 가까운 것들을 pgvector로 찾아온다.
         """
         jd_summary = state.get("jd_summary")
-        query_text = build_search_query_from_jd(jd_summary)
 
-        # print("DEBUG query_text:", repr(query_text))
-        # print("DEBUG resume_id from state:", repr(state.get("resume_id")))
+        if use_broader_query:
+            #재시도
+            query_text = build_broader_search_query_from_jd(jd_summary)
+        else:
+            query_text = build_search_query_from_jd(jd_summary)
 
         if not query_text:
             # JD (x) 빈결과로 놔둔다
@@ -123,7 +119,77 @@ def make_search_resume_node(db: Session):
     
     return search_resume_node
 
-        
+
+def increment_retry_node(state: AgentState) -> dict:
+    """
+    재시도 경로로 들어왔을 때 retry_count를 1 올린다.
+    이 카운트가 route_by_fit_score의 종료 조건으로 쓰인다.
+    """
+    return {
+        "retry_count": state.get("retry_count", 0) + 1,
+        "visited_nodes": state.get("visited_nodes", []) + ["increment_retry"],
+    }
+
+
+def gap_analyze_node(state: AgentState) -> dict:
+    """
+    JD 요구사항(jd_summary)과 검색된 이력서 경험(matched_chunks)을 비교해서
+    적합도 점수, 강점, 부족한 점을 LLM이 판단하게 한다.
+
+    이 노드가 "Reasoning"을 가장 직접적으로 보여주는 지점이다:
+    단순 추출(analyze_jd)이나 단순 검색(search_resume)과 달리,
+    두 정보를 놓고 "비교해서 판단"하는 작업이 여기서 일어난다.
+    """
+    jd_summary = state.get("jd_summary") or {}
+    matched_chunks = state.get("matched_chunks") or {}
+
+    if not matched_chunks:
+        #검색 X -> 보수적 처리 
+        return {
+            "fit_score": 0,
+            "strengths": [],
+            "gaps": jd_summary.get("required_skills", []),
+            "visited_nodes": state.get("visited_nodes", []) + ["gap_analyze"],
+        }
+    
+    experiences_text = "\n---\n".join(
+        f"[경험 {i+1}] {chunk['content']}" for i, chunk in enumerate(matched_chunks)
+    )
+
+    system_prompt = (
+        "너는 채용 적합도를 평가하는 심사관이다. "
+        "JD 요구사항과 후보자의 실제 경험을 비교해서 적합도를 평가하라. "
+        "후보자 경험에 명확히 근거가 있는 부분만 강점으로 인정하고, "
+        "막연하거나 추측에 의존해야 하는 부분은 강점으로 인정하지 마라. "
+        "단, JD가 요구하는 기술과 후보자의 경험이 기술 스택은 다르지만 "
+        "개념적으로 동일하거나 전이 가능한 역량인 경우(예: 비동기 작업 상태 관리 경험은 "
+        "Agent의 State Management와 개념적으로 연결됨), 그 연결 관계를 설명하며 "
+        "강점으로 인정하라. 과장 없이 근거를 명확히 제시하라. "
+        "반드시 JSON 형식으로만 답하라. "
+        '형식: {"fit_score": 0부터 100 사이 정수, '
+        '"strengths": ["JD 요구사항과 연결되는 실제 경험과 그 이유"], '
+        '"gaps": ["JD가 요구하지만 경험에서 근거를 찾을 수 없는 부분들"]}'
+    )
+
+    user_prompt = (
+        f"JD 필수기술: {jd_summary.get('required_skills', [])}\n"
+        f"JD 우대사항: {jd_summary.get('preferred_skills', [])}\n"
+        f"JD 도메인: {jd_summary.get('domain', '')}\n\n"
+        f"후보자 경험:\n{experiences_text}\n\n"
+        "위 정보를 바탕으로 적합도를 평가해줘."
+    )
+
+    llm = LLMService()
+    result = llm.ask_json(system_prompt, user_prompt)
+
+    return {
+        "fit_score": result.get("fit_score", 0),
+        "strengths": result.get("strengths", []),
+        "gaps": result.get("gaps", []),
+        "visited_nodes": state.get("visited_nodes", []) + ["gap_analyze"],
+    }
+
+
 def request_clarification_node(state: AgentState) -> dict:
     """
     JD 품질이 부족할 때 사용자에게 추가 정보를 요청하고 그래프를 종료하는 노드.

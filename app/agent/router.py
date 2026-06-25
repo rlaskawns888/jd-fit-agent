@@ -13,3 +13,22 @@ def route_by_jd_quality(state: AgentState) -> str:
     if state["jd_quality"] == "sufficient":
         return "analyze_jd"
     return "request_clarification"
+
+MIN_ACCEPTABLE_FIT_SCORE = 30
+MAX_RETRY_COUNT = 1
+
+def route_by_fit_score(state: AgentState) -> str:
+    """
+    gap_analyze 이후 호출되는 라우터.
+    점수가 너무 낮고 아직 재시도를 안 했으면 검색을 다시 시도하고,
+    그렇지 않으면(점수가 충분하거나 이미 재시도했으면) 종료한다.
+
+    retry_count로 재시도 한도를 두는 이유: 이게 없으면 검색을 넓혀도
+    여전히 낮은 점수가 나올 때 영원히 같은 경로를 도는 무한 루프가 될 수 있다.
+    """
+    fit_score = state.get("fit_score", 0)
+    retry_count = state.get("retry_count", 0)
+
+    if fit_score < MIN_ACCEPTABLE_FIT_SCORE and retry_count < MAX_RETRY_COUNT:
+        return "retry_search"
+    return "finish"

@@ -70,3 +70,18 @@ def build_search_query_from_jd(jd_summary: dict) -> str:
         parts.append(domain)
 
     return " ".join(parts)
+
+def build_broader_search_query_from_jd(jd_summary: dict) -> str:
+    """
+    재시도용 검색 문장. 처음 검색(build_search_query_from_jd)보다
+    domain 설명을 더 비중 있게 포함해서, 기술 키워드로는 못 찾은
+    관련 경험을 더 넓게 찾아보려는 목적이다.
+    """
+    required = jd_summary.get("required_skills", []) if jd_summary else []
+    preferred = jd_summary.get("preferred_skills", []) if jd_summary else []
+    domain = jd_summary.get("domain", "") if jd_summary else ""
+    job_title = jd_summary.get("job_title", "") if jd_summary else ""
+
+    # domain과 job_title을 앞에 둬서 검색 문장에서 비중을 높인다.
+    parts = [domain, job_title] + required + preferred
+    return " ".join(p for p in parts if p)
