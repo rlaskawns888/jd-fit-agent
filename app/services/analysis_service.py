@@ -5,9 +5,14 @@ from sqlalchemy.orm import Session
 from app.agent.graph import build_jd_fit_graph
 from app.schemas.analysis_schema import AnalysisRequest, AnalysisResponse
 
+from app.tools.jd_crawl_tool import crawl_jd_text
+
 class AnalysisService:
     def analyze(self, db: Session, payload: AnalysisRequest) -> AnalysisResponse:
-        jd_text = payload.jd_text or "" 
+        if payload.jd_url:
+            jd_text = crawl_jd_text(payload.jd_url) #크롤링
+        else:
+            jd_text = payload.jd_text or ""
 
         graph = build_jd_fit_graph(db)
         result = graph.invoke({
