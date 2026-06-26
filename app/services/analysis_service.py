@@ -59,7 +59,8 @@ class AnalysisService:
             interview_questions=[],
             used_tools=used_tools,
             sources=sources,
-            retry_count=result.get("retry_count", 0),  # 추가
+            retry_count=result.get("retry_count", 0),
+            resume_feedback=result.get("resume_feedback"),
         )
 
 

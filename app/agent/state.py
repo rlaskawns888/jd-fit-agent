@@ -33,6 +33,9 @@ class AgentState(TypedDict):
     #검색 재시도 횟수 - 무한 루프 방지
     retry_count: int
 
+    #resume_feedback_node
+    resume_feedback: Optional[dict[str, Any]]
+
     #request_clarification_node가 채우는 값
     clarification_message: Optional[str] #설명 요청 메시지
 

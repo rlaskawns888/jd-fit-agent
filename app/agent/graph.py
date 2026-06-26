@@ -12,6 +12,7 @@ from app.agent.nodes import (
     make_search_resume_node,
     gap_analyze_node,
     increment_retry_node,
+    resume_feedback_node,
     request_clarification_node,
 )
 from app.agent.router import route_by_jd_quality, route_by_fit_score
@@ -37,6 +38,7 @@ def build_jd_fit_graph(db : Session):
     builder.add_node("search_resume_retry", make_search_resume_node(db, use_broader_query=True))
     builder.add_node("gap_analyze", gap_analyze_node)
     builder.add_node("increment_retry", increment_retry_node)
+    builder.add_node("resume_feedback", resume_feedback_node)
     builder.add_node("request_clarification", request_clarification_node)
 
     builder.add_edge(START, "collect_jd")
@@ -61,13 +63,15 @@ def build_jd_fit_graph(db : Session):
         "gap_analyze",
         route_by_fit_score,
         {
-            "retry_search": "increment_retry",
-            "finish": END,
+            "retry_search": "increment_retry", #재시도
+            "finish": "resume_feedback", #이력서 피드백
         }
     )
 
     builder.add_edge("increment_retry", "search_resume_retry")
     builder.add_edge("search_resume_retry", "gap_analyze")
+
+    builder.add_edge("resume_feedback", END) #이력서 피드백
     builder.add_edge("request_clarification", END)
 
     return builder.compile()

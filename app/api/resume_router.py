@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.services.resume_service import ResumeService
@@ -9,6 +9,7 @@ from app.schemas.common_schema import ApiResponse, success_response, fail_respon
 from app.schemas.resume_schema import ResumeRequest, ResumeResponse
 
 from app.db.database import get_db
+from app.utils.file_text_extractor import extract_text_from_file
 
 
 router = APIRouter(
@@ -28,6 +29,24 @@ def create_resume(payload: ResumeRequest, db: Session = Depends(get_db)):
     result: ResumeResponse = resume_service.create_resume(db, payload)
     return success_response(data=result.model_dump(), message="resume created")
 
+
+@router.post("/upload", response_model=ApiResponse)
+async def upload_resume(file: UploadFile = File(...), db:Session = Depends(get_db)):
+    """
+    PDF/DOCX/TXT 파일을 업로드받아 텍스트를 추출하고,
+    기존 create_resume과 동일한 방식으로 이력서를 등록한다.
+    """
+    file_bytes = await file.read()
+    extracted_text = extract_text_from_file(file.filename, file_bytes)
+
+    payload = ResumeRequest(
+        title=file.filename,
+        content=extracted_text,
+    )
+    result: ResumeResponse = resume_service.create_resume(db, payload)
+    return success_response(data=result.model_dump(), message="resume uploaded")
+
+
 @router.get("/{resume_id}", response_model=ApiResponse)
 def get_resume(resume_id: UUID, db: Session = Depends(get_db)):
     resume: ResumeResponse | None = resume_service.get_resume(db, resume_id)
@@ -36,3 +55,4 @@ def get_resume(resume_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="resume not found")
     
     return success_response(data=resume.model_dump(), message="resume fetched")
+

@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.analysis_router import router as analysis_router
 from app.api.health_router import router as health_router
@@ -16,6 +17,15 @@ def create_app() -> FastAPI:
         title=settings.app_name, 
         debug=settings.debug,
         version=settings.api_version,
+    )
+
+    # React 개발 서버(5173)에서 오는 요청을 허용
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     register_exception_handlers(app)

@@ -190,6 +190,74 @@ def gap_analyze_node(state: AgentState) -> dict:
     }
 
 
+def resume_feedback_node(state: AgentState) -> dict:
+    """
+    JD 요구사항과 갭 분석 결과를 바탕으로, 원티드 이력서 피드백 스타일의
+    문장 단위 개선 제안을 만든다.
+
+    사실 왜곡을 막기 위해, LLM에게 반드시 matched_chunks의 원문을 인용하고
+    그 문장을 어떻게 고치면 좋을지만 제안하도록 강하게 지시한다.
+    """
+    jd_summary = state.get("jd_summary") or {}
+    matched_chunks = state.get("matched_chunks") or []
+    strengths = state.get("strengths") or []
+    gaps = state.get("gaps") or []
+
+    if not matched_chunks:
+        return {
+            "resume_feedback": None,
+            "visited_nodes": state.get("visited_nodes", []) + ["resume_feedback"],
+        }
+    
+    resume_text = "\n---\n".join(chunk["content"] for chunk in matched_chunks)
+
+    system_prompt = (
+        "너는 이력서 첨삭 전문가다. 채용공고(JD) 요구사항에 맞춰 "
+        "이력서를 어떻게 개선하면 좋을지 문장 단위로 피드백하라. "
+        "반드시 이력서 원문에 실제로 있는 문장만 인용해서 피드백하라. "
+        "\n\n"
+        "rewritten_example을 작성할 때 다음 규칙을 엄격히 지켜라: "
+        "1) 원문에 등장하지 않는 기술명, 도구명, 회사명, 프레임워크명(예: Agent, RAG, GCP, "
+        "OpenAI API 등)을 새로 추가하지 마라. JD에 그 기술이 요구된다고 해서 "
+        "후보자가 그 기술을 썼다고 적어서는 안 된다. "
+        "2) 원문에 없는 새로운 성과, 숫자, 직책, 기간을 추가하지 마라. "
+        "3) 허용되는 것은 오직 '표현을 더 명확하게 다듬기', '이미 있는 사실을 "
+        "JD가 쓰는 용어로 바꿔 부르기'(예: '비동기 작업 상태 추적' -> "
+        "'비동기 작업의 상태 관리'), '이미 있는 사실의 강조 순서를 바꾸기' 뿐이다. "
+        "4) 만약 원문 사실만으로는 JD와 명확히 연결할 표현이 없다면, "
+        "rewritten_example을 원문과 동일하게 두고 suggestion에 "
+        "'관련 경험을 추가로 작성해야 함'이라고 명시하라. 무리하게 연결을 지어내지 마라. "
+        "\n\n"
+        "반드시 JSON 형식으로만 답하라. "
+        '형식: {"overall_feedback": "전체 총평 한 단락", '
+        '"section_feedbacks": [{"original_text": "이력서 원문 문장", '
+        '"issue": "왜 아쉬운지", '
+        '"suggestion": "어떻게 고치면 좋을지 방향 설명", '
+        '"rewritten_example": "원문 사실에 기반해 표현만 다듬은 예시 문장"}], '
+        '"missing_keywords": ["이력서에 없지만 JD가 원하는 키워드"], '
+        '"strengths_to_emphasize": ["이미 있지만 더 강조하면 좋을 부분"]}'
+    )
+
+    user_prompt = (
+        f"JD 필수기술: {jd_summary.get('required_skills', [])}\n"
+        f"JD 우대사항: {jd_summary.get('preferred_skills', [])}\n"
+        f"이미 확인된 강점: {strengths}\n"
+        f"이미 확인된 갭: {gaps}\n\n"
+        f"이력서 원문:\n{resume_text}\n\n"
+        "위 이력서를 JD에 맞춰 개선할 수 있도록 문장 단위로 피드백하고, "
+        "각 피드백마다 표현만 다듬은 예시 문장도 같이 제시해줘. "
+        "절대 원문에 없는 기술명이나 도구명을 추가하지 마."
+    )
+
+    llm = LLMService()
+    result = llm.ask_json(system_prompt, user_prompt)
+
+    return {
+        "resume_feedback": result,
+        "visited_nodes": state.get("visited_nodes", []) + ["resume_feedback"],
+    }
+
+
 def request_clarification_node(state: AgentState) -> dict:
     """
     JD 품질이 부족할 때 사용자에게 추가 정보를 요청하고 그래프를 종료하는 노드.

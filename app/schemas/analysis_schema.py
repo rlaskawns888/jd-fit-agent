@@ -34,4 +34,5 @@ class AnalysisResponse(BaseModel):
     interview_questions: List[str]
     used_tools: List[str]
     sources: List[str]
-    retry_count: int = 0  # 추가
+    retry_count: int = 0  #재시도 횟수
+    resume_feedback: Optional[dict] = None  #이력서 피드백
