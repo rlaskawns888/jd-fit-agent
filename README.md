@@ -20,24 +20,24 @@
 
 ## 아키텍처
 
-\`\`\`mermaid
+```mermaid
 flowchart TD
     START([입력: JD + 이력서]) --> collect[collect_jd]
-    collect --> quality[assess_jd_quality<br/>LLM 판단]
-    quality -->|정보 충분| analyze[analyze_jd<br/>JD 구조화 추출]
+    collect --> quality[assess_jd_quality LLM 판단]
+    quality -->|정보 충분| analyze[analyze_jd JD 구조화 추출]
     quality -->|정보 부족| clarify[request_clarification]
     clarify --> END1([종료: 재입력 요청])
 
-    analyze --> search[search_resume<br/>pgvector RAG 검색]
-    search --> gap[gap_analyze<br/>LLM 비교 판단]
+    analyze --> search[search_resume pgvector RAG 검색]
+    search --> gap[gap_analyze LLM 비교 판단]
 
-    gap -->|점수 낮음 & 재시도 가능| retry[increment_retry]
-    retry --> search2[search_resume_retry<br/>넓은 검색어로 재검색]
+    gap -->|점수 낮음 재시도 가능| retry[increment_retry]
+    retry --> search2[search_resume_retry 넓은 검색어로 재검색]
     search2 --> gap
 
-    gap -->|점수 충분 또는 재시도 완료| feedback[resume_feedback<br/>문장 단위 개선 제안]
+    gap -->|점수 충분 또는 재시도 완료| feedback[resume_feedback 문장 단위 개선 제안]
     feedback --> END2([종료: 결과 반환])
-\`\`\`
+```
 
 이 그래프 설계가 보여주는 3가지:
 
@@ -66,48 +66,48 @@ flowchart TD
 
 ## 트러블슈팅 노트
 
-개발 중 마주친 문제와 해결 과정을 기록합니다 (디버깅 경험 증거):
+개발 중 마주친 문제와 해결 과정을 기록합니다.
 
 - **pgvector 컬럼 매핑 오류**: SQLAlchemy에는 `VECTOR` 타입이 없어 `pgvector.sqlalchemy.Vector`로 교체. FK 테이블명 단수/복수 오타로 인한 마이그레이션 실패 수정.
 - **임베딩 차원 불일치 에러**: `embed_texts(["text"])[0]`을 `embed_texts(["text"][0])`로 잘못 작성해 문자열이 글자 단위로 분해되어 전달되던 버그 수정.
-- **LangGraph state 키 오타**: 노드가 반환하는 dict의 키(`mached_chunks`)가 `AgentState` 정의(`matched_chunks`)와 달라 검색 결과가 항상 빈 배열로 전달되던 문제. TypedDict는 런타임에 키를 강제하지 않아 발견이 어려�웠음.
+- **LangGraph state 키 오타**: 노드가 반환하는 dict의 키(`mached_chunks`)가 `AgentState` 정의(`matched_chunks`)와 달라 검색 결과가 항상 빈 배열로 전달되던 문제. TypedDict는 런타임에 키를 강제하지 않아 발견이 어려웠음.
 - **PDF 텍스트 추출 실패**: Word 기반으로 디자인된 PDF는 `pypdf`/`pdfplumber` 모두 텍스트 추출 실패. 원본 DOCX 파일 업로드로 우회.
 
 ## 실행 방법
 
 ### 1. 환경변수 설정
 
-\`.env.example\`을 복사해 \`.env\`로 만들고 값을 채웁니다.
+`.env.example`을 복사해 `.env`로 만들고 값을 채웁니다.
 
-\`\`\`bash
+```bash
 cp .env.example .env
-\`\`\`
+```
 
 ### 2. PostgreSQL (pgvector) 실행
 
-\`\`\`bash
-docker run --name jd-fit-agent-postgres \\
-  -e POSTGRES_USER=app_user \\
-  -e POSTGRES_PASSWORD=app_password \\
-  -e POSTGRES_DB=jd-fit-agent \\
-  -p 5432:5432 \\
+```bash
+docker run --name jd-fit-agent-postgres \
+  -e POSTGRES_USER=app_user \
+  -e POSTGRES_PASSWORD=app_password \
+  -e POSTGRES_DB=jd-fit-agent \
+  -p 5432:5432 \
   -d pgvector/pgvector:pg17
-\`\`\`
+```
 
 ### 3. 백엔드 실행
 
-\`\`\`bash
+```bash
 pip install -r requirements.txt
 uvicorn app.main:app --reload
-\`\`\`
+```
 
 ### 4. 프론트엔드 실행
 
-\`\`\`bash
+```bash
 cd frontend
 npm install
 npm run dev
-\`\`\`
+```
 
 ## API 명세
 
